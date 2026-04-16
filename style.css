@@ -1,0 +1,129 @@
+body {
+  margin: 0;
+  background-color: #f0f2f5;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+.main-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.app-layout {
+  display: flex;
+  gap: 30px; /* 좌우 간격 */
+  align-items: flex-start;
+}
+
+/* 왼쪽 패널 (고정 너비) */
+.left-panel {
+  flex: 0 0 350px;
+}
+
+/* 오른쪽 패널 (남은 공간 모두 차지) */
+.right-panel {
+  flex: 1;
+  background: white;
+  border-radius: 24px;
+  min-height: 500px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+
+/* 카드 및 입력창 스타일 */
+.calc-card {
+  background: white;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+
+.calc-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 25px;
+  text-align: center;
+}
+
+.calc-body { padding: 25px; }
+
+.input-group { margin-bottom: 20px; }
+.input-group label { display: block; font-size: 13px; color: #666; margin-bottom: 8px; }
+.input-group input {
+  width: 100%; padding: 12px; border: 2px solid #eee; border-radius: 10px; font-size: 15px; box-sizing: border-box;
+}
+
+.calc-btn {
+  width: 100%; padding: 15px; border: none; background: #764ba2; color: white;
+  border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.3s;
+}
+
+/* 리포트 그리드 (좌우 2열) */
+.report-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 1:1 비율로 나눔 */
+  gap: 25px;
+  padding: 30px;
+}
+
+.result-section h3 {
+  font-size: 16px; color: #764ba2; border-left: 4px solid #764ba2;
+  padding-left: 10px; margin-bottom: 15px;
+}
+
+/* 테이블 스타일 */
+.table-wrapper { border: 1px solid #eee; border-radius: 12px; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: #f8f9fa; padding: 12px 10px; text-align: left; border-bottom: 1px solid #eee; }
+td { padding: 12px 10px; border-bottom: 1px solid #eee; }
+tr:last-child td { background: #fdfaff; font-weight: bold; color: #764ba2; }
+
+/* 안내 문구 */
+.welcome-msg {
+  height: 500px; display: flex; align-items: center; justify-content: center;
+  text-align: center; color: #aaa; line-height: 1.6;
+}
+
+/* 반응형: 화면이 작아지면 한 줄로 */
+@media (max-width: 900px) {
+  .app-layout { flex-direction: column; }
+  .left-panel { flex: 1; width: 100%; }
+  .report-grid { grid-template-columns: 1fr; }
+}
+
+/* 오른쪽 하단 서명 스타일 */
+.signature {
+  text-align: center;
+  padding: 20px;
+  font-size: 25px;
+  color: #888; /* 연한 회색 */
+  font-weight: 500;
+  letter-spacing: 1px; /* 글자 사이 간격을 약간 벌려 세련되게 */
+}
+
+.tab-menu { display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+.tab-btn {
+  background: none; border: none; padding: 10px 15px; cursor: pointer;
+  font-weight: 600; color: #aaa; transition: 0.3s;
+}
+.tab-btn.active { color: #764ba2; border-bottom: 2px solid #764ba2; }
+#money-inputs { animation: fadeIn 0.5s; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* 수당 항목 스타일 */
+.allowance-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  animation: slideIn 0.3s ease;
+}
+.allowance-row input { flex: 1; padding: 10px; border: 2px solid #eee; border-radius: 8px; }
+.remove-btn {
+  padding: 0 12px; border: none; background: #ff4d4d; color: white;
+  border-radius: 8px; cursor: pointer; font-weight: bold;
+}
+.add-allowance-btn {
+  width: 100%; padding: 10px; border: 2px dashed #764ba2; background: #fdfaff;
+  color: #764ba2; border-radius: 10px; cursor: pointer; font-weight: 600; margin-top: 5px;
+}
+@keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
