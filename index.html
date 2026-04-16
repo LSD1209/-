@@ -2,142 +2,158 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>연차 계산기 - Made By L.S.D</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <title>연차 & 수당 계산기 - Made By L.S.D</title>
     <style>
-        /* [CSS 영역] */
-        body { margin: 0; background-color: #f0f2f5; font-family: 'Noto Sans KR', sans-serif; }
+        body { margin: 0; background-color: #f0f2f5; font-family: sans-serif; }
         .main-container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
-        .app-layout { display: flex; gap: 30px; align-items: flex-start; }
+        .app-layout { display: flex; gap: 30px; }
         .left-panel { flex: 0 0 350px; }
-        .right-panel { flex: 1; background: white; border-radius: 24px; min-height: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; }
+        .right-panel { flex: 1; background: white; border-radius: 24px; min-height: 500px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
         .calc-card { background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
         .calc-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; text-align: center; }
         .calc-body { padding: 25px; }
-        .input-group { margin-bottom: 20px; }
-        .input-group label { display: block; font-size: 13px; color: #666; margin-bottom: 8px; }
-        .input-group input { width: 100%; padding: 12px; border: 2px solid #eee; border-radius: 10px; font-size: 15px; box-sizing: border-box; }
-        .calc-btn { width: 100%; padding: 15px; border: none; background: #764ba2; color: white; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.3s; }
-        .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; padding: 30px; }
-        .result-section h3 { font-size: 16px; color: #764ba2; border-left: 4px solid #764ba2; padding-left: 10px; margin-bottom: 15px; }
-        .table-wrapper { border: 1px solid #eee; border-radius: 12px; overflow: hidden; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { background: #f8f9fa; padding: 12px 10px; text-align: left; border-bottom: 1px solid #eee; }
-        td { padding: 12px 10px; border-bottom: 1px solid #eee; }
-        tr:last-child td { background: #fdfaff; font-weight: bold; color: #764ba2; }
-        .welcome-msg { height: 500px; display: flex; align-items: center; justify-content: center; text-align: center; color: #aaa; line-height: 1.6; }
-        .signature { text-align: center; padding: 20px; font-size: 14px; color: #888; font-weight: 500; letter-spacing: 1px; }
-        @media (max-width: 900px) { .app-layout { flex-direction: column; } .left-panel { flex: 1; width: 100%; } .report-grid { grid-template-columns: 1fr; } }
+        .tab-menu { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #eee; }
+        .tab-btn { background: none; border: none; padding: 10px; cursor: pointer; font-weight: bold; color: #aaa; }
+        .tab-btn.active { color: #764ba2; border-bottom: 2px solid #764ba2; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-size: 13px; margin-bottom: 5px; color: #666; }
+        .input-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        .allowance-row { display: flex; gap: 5px; margin-bottom: 5px; }
+        .add-allowance-btn { width: 100%; padding: 8px; border: 1px dashed #764ba2; background: #fdfaff; color: #764ba2; cursor: pointer; border-radius: 8px; margin-bottom: 15px; }
+        .calc-btn { width: 100%; padding: 15px; border: none; background: #764ba2; color: white; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+        th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
+        .signature { text-align: center; margin-top: 30px; color: #bbb; font-size: 12px; }
     </style>
-</head>
+    </head>
 <body>
+
     <div class="main-container">
         <div class="app-layout">
             <div class="left-panel">
                 <div class="calc-card">
-                    <div class="calc-header">
-                        <h1>연차 계산기</h1>
-                        <p>입사일 및 퇴사일 입력</p>
-                    </div>
+                    <div class="calc-header"><h1>연차 & 수당</h1><p>Made By L.S.D</p></div>
                     <div class="calc-body">
-                        <div class="input-group"><label>입사일</label><input type="date" id="join-date"></div>
-                        <div class="input-group"><label>퇴사일 (기준일)</label><input type="date" id="exit-date"></div>
-                        <button class="calc-btn" onclick="calculateAll()"><span>📊</span> 리포트 생성하기</button>
+                        <div class="tab-menu">
+                            <button class="tab-btn active" onclick="openTab('leave-tab')">연차 발생</button>
+                            <button class="tab-btn" onclick="openTab('money-tab')">수당 계산</button>
+                        </div>
+                        <div id="date-inputs">
+                            <div class="input-group"><label>입사일</label><input type="date" id="join-date"></div>
+                            <div class="input-group"><label>퇴사일</label><input type="date" id="exit-date"></div>
+                        </div>
+                        <div id="money-inputs" style="display:none;">
+                            <div class="input-group"><label>기본급</label><input type="number" id="base-salary"></div>
+                            <div id="allowance-list"></div>
+                            <button class="add-allowance-btn" onclick="addAllowanceField()">+ 수당 추가</button>
+                            <div class="input-group"><label>미사용 연차일수</label><input type="number" id="unused-days"></div>
+                        </div>
+                        <button class="calc-btn" onclick="mainCalculate()">계산하기</button>
                     </div>
                 </div>
             </div>
             <div class="right-panel">
-                <div id="report-area" class="report-container" style="display:none;">
-                    <div class="report-grid">
-                        <div class="result-section">
-                            <h3>📅 입사일 기준 연차</h3>
-                            <div class="table-wrapper"><table id="join-basis-table"><thead><tr><th>차수</th><th>내용</th><th>발생</th></tr></thead><tbody></tbody></table></div>
-                        </div>
-                        <div class="result-section">
-                            <h3>🏢 회계연도 기준 (1/1)</h3>
-                            <div class="table-wrapper"><table id="accounting-basis-table"><thead><tr><th>연도</th><th>내용</th><th>발생</th></tr></thead><tbody></tbody></table></div>
-                        </div>
+                <div id="welcome-msg" style="text-align:center; padding-top:100px; color:#ccc;">정보를 입력하고 계산 버튼을 누르세요.</div>
+                <div id="leave-report" style="display:none;">
+                    <h3>📅 연차 발생 현황</h3>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                        <div><h4>입사일 기준</h4><table id="join-basis-table"><thead><tr><th>연도</th><th>내용</th><th>발생</th></tr></thead><tbody></tbody></table></div>
+                        <div><h4>회계연도 기준</h4><table id="accounting-basis-table"><thead><tr><th>연도</th><th>내용</th><th>발생</th></tr></thead><tbody></tbody></table></div>
                     </div>
                 </div>
-                <div id="welcome-msg" class="welcome-msg"><p>입력 후 버튼을 누르면<br>상세 리포트가 여기에 표시됩니다.</p></div>
+                <div id="money-report" style="display:none;">
+                    <h3>💰 수당 예상액</h3>
+                    <table id="money-result-table"><thead><tr><th>항목</th><th>상세</th><th>금액</th></tr></thead><tbody></tbody></table>
+                </div>
                 <div class="signature">Made By L.S.D</div>
             </div>
         </div>
     </div>
-
     <script>
-        /* [JavaScript 영역] */
-        function calculateAll() {
-            const joinI = document.getElementById('join-date').value;
-            const exitI = document.getElementById('exit-date').value;
-            if (!joinI || !exitI) { alert("날짜를 입력해주세요! 😊"); return; }
-            const join = new Date(joinI); const exit = new Date(exitI);
-            if (exit < join) { alert("퇴사일이 입사일보다 빠를 수 없습니다!"); return; }
-            document.getElementById('report-area').style.display = 'block';
+        let currentTab = 'leave-tab';
+        function openTab(t) {
+            currentTab = t;
+            document.getElementById('date-inputs').style.display = t === 'leave-tab' ? 'block' : 'none';
+            document.getElementById('money-inputs').style.display = t === 'money-tab' ? 'block' : 'none';
+            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', (i === 0 && t === 'leave-tab') || (i === 1 && t === 'money-tab')));
+        }
+        function addAllowanceField() {
+            const row = document.createElement('div');
+            row.className = 'allowance-row';
+            row.innerHTML = `<input type="text" placeholder="수당명" style="width:60%"><input type="number" placeholder="금액" class="allowance-value" style="width:30%"><button onclick="this.parentElement.remove()">×</button>`;
+            document.getElementById('allowance-list').appendChild(row);
+        }
+        function mainCalculate() {
             document.getElementById('welcome-msg').style.display = 'none';
-            renderJoinBasis(join, exit); renderAccountingBasis(join, exit);
-        }
-
-        function renderJoinBasis(join, exit) {
-            const tbody = document.querySelector('#join-basis-table tbody');
-            tbody.innerHTML = ''; let total = 0;
-            let firstM = Math.min(11, Math.floor((exit - join) / (1000*60*60*24*30.44)));
-            if (firstM > 0) { addRow(tbody, "1년차 미만", "매월 개근 시 발생", firstM.toFixed(1)); total += firstM; }
-            let year = 1;
-            while (true) {
-                let d = new Date(join); d.setFullYear(join.getFullYear() + year);
-                if (d > exit) break;
-                let leave = Math.min(25, 15 + Math.floor((year - 1) / 2));
-                addRow(tbody, `${year + 1}년차`, `${d.toLocaleDateString()} 발생`, leave.toFixed(1));
-                total += leave; year++;
+            if(currentTab === 'leave-tab') {
+                document.getElementById('leave-report').style.display = 'block';
+                document.getElementById('money-report').style.display = 'none';
+                calculateLeave();
+            } else {
+                document.getElementById('leave-report').style.display = 'none';
+                document.getElementById('money-report').style.display = 'block';
+                calculateMoney();
             }
-            addRow(tbody, "합계", "-", total.toFixed(1));
         }
-
-        function renderAccountingBasis(join, exit) {
-            const tbody = document.querySelector('#accounting-basis-table tbody');
-            tbody.innerHTML = ''; let total = 0;
-            const joinYear = join.getFullYear();
-            const nextJan1 = new Date(joinYear + 1, 0, 1);
-            const oneYearAnn = new Date(join); oneYearAnn.setFullYear(joinYear + 1);
-
-            let firstYMonthly = 0;
+        function calculateMoney() {
+            const base = Number(document.getElementById('base-salary').value) || 0;
+            const days = Number(document.getElementById('unused-days').value) || 0;
+            let adds = 0;
+            document.querySelectorAll('.allowance-value').forEach(i => adds += Number(i.value) || 0);
+            const total = base + adds;
+            const hourly = total / 209;
+            const daily = hourly * 8;
+            const res = daily * days;
+            document.querySelector('#money-result-table tbody').innerHTML = `
+                <tr><td>총 통상임금</td><td>기본급+수당</td><td>${total.toLocaleString()}원</td></tr>
+                <tr><td>통상 시급</td><td>총액/209</td><td>${Math.floor(hourly).toLocaleString()}원</td></tr>
+                <tr style="font-weight:bold; color:#764ba2;"><td>최종 수당액</td><td>${days}일분</td><td>${Math.floor(res).toLocaleString()}원</td></tr>
+            `;
+        }
+        function calculateLeave() {
+            const j = new Date(document.getElementById('join-date').value);
+            const e = new Date(document.getElementById('exit-date').value);
+            renderJoin(j, e); renderAcc(j, e);
+        }
+        function renderJoin(j, e) {
+            const tb = document.querySelector('#join-basis-table tbody'); tb.innerHTML = '';
+            let total = 0;
+            let firstM = Math.min(11, Math.floor((e - j) / (1000*60*60*24*30.44)));
+            if (firstM > 0) { addRow(tb, "1년차 미만", "월차", firstM.toFixed(1)); total += firstM; }
+            let y = 1;
+            while (true) {
+                let d = new Date(j); d.setFullYear(j.getFullYear() + y);
+                if (d > e) break;
+                let leave = Math.min(25, 15 + Math.floor((y - 1) / 2));
+                addRow(tb, `${y+1}년차`, d.toLocaleDateString(), leave.toFixed(1));
+                total += leave; y++;
+            }
+            addRow(tb, "합계", "-", total.toFixed(1));
+        }
+        function renderAcc(j, e) {
+            const tb = document.querySelector('#accounting-basis-table tbody'); tb.innerHTML = '';
+            let total = 0;
+            const nextJan1 = new Date(j.getFullYear() + 1, 0, 1);
+            let firstM = 0;
             for (let i = 1; i <= 11; i++) {
-                let d = new Date(join); d.setMonth(join.getMonth() + i);
-                if (d < nextJan1 && d <= exit) firstYMonthly++;
+                let d = new Date(j); d.setMonth(j.getMonth() + i);
+                if (d < nextJan1 && d <= e) firstM++;
             }
-            if (firstYMonthly > 0) { addRow(tbody, joinYear, `입사년(월차) 발생`, firstYMonthly.toFixed(1)); total += firstYMonthly; }
-
-            if (nextJan1 <= exit) {
-                let daysF = (nextJan1 - join) / (1000 * 60 * 60 * 24);
-                let prop = (15 * (daysF / 365));
-                addRow(tbody, nextJan1.getFullYear(), `2년차(연차) 비례분`, prop.toFixed(1));
-                total += prop;
-                let secondYMonthly = 0;
-                for (let i = 1; i <= 11; i++) {
-                    let d = new Date(join); d.setMonth(join.getMonth() + i);
-                    if (d >= nextJan1 && d < oneYearAnn && d <= exit) secondYMonthly++;
-                }
-                if (secondYMonthly > 0) { addRow(tbody, nextJan1.getFullYear(), `2년차(월차) 잔여분`, secondYMonthly.toFixed(1)); total += secondYMonthly; }
+            if (firstM > 0) { addRow(tb, j.getFullYear(), "입사년 월차", firstM.toFixed(1)); total += firstM; }
+            if (nextJan1 <= e) {
+                let prop = (15 * ((nextJan1 - j) / (1000*60*60*24) / 365));
+                addRow(tb, nextJan1.getFullYear(), "비례분", prop.toFixed(1)); total += prop;
             }
-
-            let curYear = joinYear + 2;
+            let curY = j.getFullYear() + 2;
             while (true) {
-                let checkD = new Date(curYear, 0, 1); if (checkD > exit) break;
-                let yCount = curYear - joinYear;
-                let leave = 15;
-                if (yCount >= 4) { leave = 15 + Math.floor((yCount - 2) / 2); }
-                if (leave > 25) leave = 25;
-                addRow(tbody, curYear, `${yCount + 1}년차 정기 발생`, leave.toFixed(1));
-                total += leave; curYear++;
+                let d = new Date(curY, 0, 1); if (d > e) break;
+                let yc = curY - j.getFullYear();
+                let leave = yc >= 4 ? 15 + Math.floor((yc-2)/2) : 15;
+                addRow(tb, curY, "정기", leave.toFixed(1)); total += leave; curY++;
             }
-            addRow(tbody, "합계", "-", total.toFixed(1));
+            addRow(tb, "합계", "-", total.toFixed(1));
         }
-
-        function addRow(target, c1, c2, c3) {
-            target.insertAdjacentHTML('beforeend', `<tr><td>${c1}</td><td>${c2}</td><td>${c3}</td></tr>`);
-        }
+        function addRow(t, c1, c2, c3) { t.insertAdjacentHTML('beforeend', `<tr><td>${c1}</td><td>${c2}</td><td>${c3}</td></tr>`); }
     </script>
-</body>
+    </body>
 </html>
