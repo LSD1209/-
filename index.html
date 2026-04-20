@@ -11,6 +11,7 @@
   <body>
   <div class="main-container">
   <div class="app-layout">
+    <!-- 왼쪽 패널: 입력 영역 -->
     <div class="left-panel">
       <div class="calc-card">
         <div class="calc-header">
@@ -18,31 +19,73 @@
           <p>Made By L.S.D</p>
         </div>
         <div class="calc-body">
+          <!-- 탭 메뉴 -->
           <div class="tab-menu">
             <button class="tab-btn active" onclick="openTab('leave-tab')">연차 발생</button>
             <button class="tab-btn" onclick="openTab('money-tab')">수당 계산</button>
           </div>
 
+          <!-- 연차 계산 입력 -->
           <div id="date-inputs">
-            <div class="input-group"><label>입사일</label><input type="date" id="join-date"></div>
-            <div class="input-group"><label>퇴사일 (기준일)</label><input type="date" id="exit-date"></div>
+            <div class="input-group">
+              <label for="join-date">입사일</label>
+              <input type="date" id="join-date">
+            </div>
+            <div class="input-group">
+              <label for="exit-date">퇴사일 (기준일)</label>
+              <input type="date" id="exit-date">
+            </div>
+
+            <!-- ✅ 새로 추가된 트래커 입력부 -->
+            <div class="tracker-divider"></div>
+            <div class="input-group">
+              <label for="used-leave">
+                이미 사용한 연차 (일)
+                <span class="help-icon" title="재직기간 동안 실제로 사용한 총 연차 일수를 입력하세요">ⓘ</span>
+              </label>
+              <input type="number" id="used-leave" placeholder="예: 7.5" min="0" step="0.5" value="0">
+            </div>
+
+            <!-- ✅ 연차 요약 카드 -->
+            <div id="leave-tracker" class="leave-tracker" style="display:none;">
+              <div class="tracker-row">
+                <span class="tracker-label">총 발생</span>
+                <span class="tracker-value total" id="tracker-total">0일</span>
+              </div>
+              <div class="tracker-row">
+                <span class="tracker-label">사용</span>
+                <span class="tracker-value used" id="tracker-used">0일</span>
+              </div>
+              <div class="tracker-row highlight">
+                <span class="tracker-label">잔여</span>
+                <span class="tracker-value remain" id="tracker-remain">0일</span>
+              </div>
+              
+              <button class="auto-send-btn" onclick="sendToMoneyTab()" id="auto-send-btn">
+                💸 수당 계산으로 자동 전송
+              </button>
+            </div>
+
+            <div id="tracker-warning" class="tracker-warning" style="display:none;">
+              ⚠️ 사용한 연차가 발생 연차보다 많습니다! 초과 사용 상태입니다.
+            </div>
           </div>
 
+          <!-- 수당 계산 입력 -->
           <div id="money-inputs" style="display:none;">
             <div class="input-group">
-              <label>기본급 (원)</label>
+              <label for="base-salary">기본급 (원)</label>
               <input type="number" id="base-salary" placeholder="예: 2500000">
             </div>
   
-            <div id="allowance-list">
-              </div>
+            <div id="allowance-list"></div>
 
             <button class="add-allowance-btn" onclick="addAllowanceField()">
               + 수당 항목 추가
             </button>
 
             <div class="input-group" style="margin-top: 20px;">
-              <label>미사용 연차 개수 (일)</label>
+              <label for="unused-days">미사용 연차 개수 (일)</label>
               <input type="number" id="unused-days" placeholder="예: 5">
             </div>
           </div>
@@ -52,28 +95,59 @@
       </div>
     </div>
 
+    <!-- 오른쪽 패널: 결과 영역 -->
     <div class="right-panel">
       <div id="welcome-msg" class="welcome-msg">
         <p>왼쪽 정보를 입력한 후<br>버튼을 눌러 리포트를 확인하세요.</p>
       </div>
 
+      <!-- 연차 리포트 -->
       <div id="leave-report" class="report-container" style="display:none;">
+        <!-- ✅ 잔여 연차 배너 -->
+        <div id="summary-banner" class="summary-banner" style="display:none;">
+          <div class="banner-content">
+            <div class="banner-main">
+              <span class="banner-title">📋 최종 잔여 연차</span>
+              <span class="banner-amount" id="banner-amount">0일</span>
+            </div>
+            <div class="banner-sub" id="banner-sub">
+              근로기준법상 유리한 기준 자동 적용
+            </div>
+          </div>
+        </div>
+
         <div class="report-grid">
           <div class="result-section">
             <h3>📅 입사일 기준</h3>
-            <div class="table-wrapper"><table id="join-basis-table"><thead><tr><th>차수</th><th>내용</th><th>발생</th></tr></thead><tbody></tbody></table></div>
+            <div class="table-wrapper">
+              <table id="join-basis-table">
+                <thead><tr><th>차수</th><th>내용</th><th>발생</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
           </div>
           <div class="result-section">
             <h3>🏢 회계연도 기준</h3>
-            <div class="table-wrapper"><table id="accounting-basis-table"><thead><tr><th>연도</th><th>내용</th><th>발생</th></tr></thead><tbody></tbody></table></div>
+            <div class="table-wrapper">
+              <table id="accounting-basis-table">
+                <thead><tr><th>연도</th><th>내용</th><th>발생</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- 수당 리포트 -->
       <div id="money-report" class="report-container" style="display:none; padding: 30px;">
         <div class="result-section">
           <h3>💰 연차 수당 예상액</h3>
-          <div class="table-wrapper"><table id="money-result-table"><thead><tr><th>항목</th><th>상세 내역</th><th>금액</th></tr></thead><tbody></tbody></table></div>
+          <div class="table-wrapper">
+            <table id="money-result-table">
+              <thead><tr><th>항목</th><th>상세 내역</th><th>금액</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
       </div>
       
