@@ -1,123 +1,214 @@
 let currentTab = 'leave-tab';
 const LAW_CHANGE_DATE = new Date('2017-05-30');
+let currentCalculationData = null;
 
-// 탭 전환
+// ================= 천단위 콤마 포맷팅 =================
+
+function parseNumber(value) {
+    if (!value) return 0;
+    return Number(String(value).replace(/,/g, '')) || 0;
+}
+
+function applyCommaFormat(input) {
+    const currentValue = input.value;
+    const cursorPosition = input.selectionStart;
+    const numbersOnly = currentValue.replace(/[^0-9]/g, '');
+    if (numbersOnly === '') { input.value = ''; return; }
+    const formatted = Number(numbersOnly).toLocaleString('ko-KR');
+    const prevCommaCount = (currentValue.match(/,/g) || []).length;
+    const newCommaCount = (formatted.match(/,/g) || []).length;
+    input.value = formatted;
+    const newCursor = Math.min(cursorPosition + (newCommaCount - prevCommaCount), formatted.length);
+    input.setSelectionRange(newCursor, newCursor);
+}
+
+function attachMoneyFormat(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.setAttribute('type', 'text');
+    input.setAttribute('inputmode', 'numeric');
+    input.addEventListener('input', function() { applyCommaFormat(this); });
+    input.addEventListener('paste', function() { setTimeout(() => applyCommaFormat(this), 0); });
+}
+
+// ================= 탭 전환 시스템 (저장 탭 포함) =================
+
 function openTab(t) {
     currentTab = t;
-    document.getElementById('date-inputs').style.display = t === 'leave-tab' ? 'block' : 'none';
-    document.getElementById('money-inputs').style.display = t === 'money-tab' ? 'block' : 'none';
+    
+    // 안전한 DOM 조작
+    const safeDisplay = (id, display) => {
+        const element = document.getElementById(id);
+        if (element) element.style.display = display;
+    };
+    
+    safeDisplay('date-inputs', t === 'leave-tab' ? 'block' : 'none');
+    safeDisplay('money-inputs', t === 'money-tab' ? 'block' : 'none');
+    safeDisplay('history-inputs', t === 'history-tab' ? 'block' : 'none');
+    safeDisplay('main-calc-btn', t === 'history-tab' ? 'none' : 'block');
+    
+    // 탭 버튼 활성화 (3개 탭 지원)
     document.querySelectorAll('.tab-btn').forEach((b, i) => {
-        b.classList.toggle('active', (i === 0 && t === 'leave-tab') || (i === 1 && t === 'money-tab'));
+        b.classList.toggle('active', 
+            (i === 0 && t === 'leave-tab') || 
+            (i === 1 && t === 'money-tab') || 
+            (i === 2 && t === 'history-tab')
+        );
     });
-}
-
-// 수당 항목 추가
-function addAllowanceField() {
-    const list = document.getElementById('allowance-list');
-    const row = document.createElement('div');
-    row.className = 'allowance-row';
-    row.innerHTML = `
-        <input type="text" placeholder="수당명(식대 등)" style="width:55%">
-        <input type="number" placeholder="금액" class="allowance-value" style="width:30%">
-        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
-    `;
-    list.appendChild(row);
-}
-
-// 메인 계산
-function mainCalculate() {
-    document.getElementById('welcome-msg').style.display = 'none';
-    if(currentTab === 'leave-tab') {
-        document.getElementById('leave-report').style.display = 'block';
-        document.getElementById('money-report').style.display = 'none';
-        calculateLeave();
-    } else {
-        document.getElementById('leave-report').style.display = 'none';
-        document.getElementById('money-report').style.display = 'block';
-        calculateMoney();
+    
+    // 저장 내역 탭 진입 시 리스트 렌더링
+    if (t === 'history-tab') {
+        renderHistoryList();
     }
 }
 
-// ✅ 수정된 연차 계산 (버그 수정 + 트래커 연동)
+function mainCalculate() {
+    const welcomeMsg = document.getElementById('welcome-msg');
+    if (welcomeMsg) welcomeMsg.style.display = 'none';
+    
+    const saveBar = document.getElementById('save-action-bar');
+    if (saveBar) saveBar.style.display = 'block';
+    
+    if (currentTab === 'leave-tab') {
+        const leaveReport = document.getElementById('leave-report');
+        const moneyReport = document.getElementById('money-report');
+        if (leaveReport) leaveReport.style.display = 'block';
+        if (moneyReport) moneyReport.style.display = 'none';
+        calculateLeave();
+    } else if (currentTab === 'money-tab') {
+        const leaveReport = document.getElementById('leave-report');
+        const moneyReport = document.getElementById('money-report');
+        if (leaveReport) leaveReport.style.display = 'none';
+        if (moneyReport) moneyReport.style.display = 'block';
+        calculateMoney();
+    }
+    
+    // 계산 데이터 수집
+    setTimeout(() => collectCurrentCalculationData(), 100);
+}
+
+function addRow(t, c1, c2, c3) {
+    t.insertAdjacentHTML('beforeend', `<tr><td>${c1}</td><td>${c2}</td><td>${c3}</td></tr>`);
+}
+
+function limitDateYearInput(input) {
+    const value = input.value;
+    if (!value) return;
+    const parts = value.split('-');
+    if (parts[0] && parts[0].length > 4) { parts[0] = parts[0].slice(0, 4); input.value = parts.join('-'); }
+    const yearNum = parseInt(parts[0], 10);
+    if (!isNaN(yearNum) && yearNum > 2100) { parts[0] = '2100'; input.value = parts.join('-'); }
+}
+
+// ================= 연차 촉진제 =================
+
+function togglePromotion() {
+    const enablePromotion = document.getElementById('enable-promotion');
+    const notice = document.getElementById('promotion-notice');
+    
+    if (enablePromotion && notice) {
+        notice.style.display = enablePromotion.checked ? 'block' : 'none';
+    }
+    
+    const leaveReport = document.getElementById('leave-report');
+    if (leaveReport && leaveReport.style.display !== 'none') {
+        calculateLeave();
+    }
+}
+
+// ================= 연차 발생 계산 =================
+
 function calculateLeave() {
     const joinInput = document.getElementById('join-date').value;
     const exitInput = document.getElementById('exit-date').value;
-    if(!joinInput || !exitInput) { alert("날짜를 입력해주세요!"); return; }
+    if (!joinInput || !exitInput) { alert("입사일과 퇴사일을 모두 입력해주세요!"); return; }
 
     const join = new Date(joinInput);
     const exit = new Date(exitInput);
-    
-    if (exit <= join) {
-        alert("퇴사일은 입사일보다 이후여야 합니다!");
-        return;
-    }
-    
-    const totalJoin = renderJoinBasis(join, exit);
-    const totalAccounting = renderAccountingBasis(join, exit);
-    
-    // 근로자에게 유리한 기준 자동 선택
+    if (exit <= join) { alert("퇴사일은 입사일보다 이후여야 합니다!"); return; }
+
+    const enablePromotion = document.getElementById('enable-promotion');
+    const isPromotion = enablePromotion ? enablePromotion.checked : false;
+
+    const totalJoin = renderJoinBasis(join, exit, isPromotion);
+    const totalAccounting = renderAccountingBasis(join, exit, isPromotion);
+
     const maxTotal = Math.max(totalJoin, totalAccounting);
     const usedDays = Number(document.getElementById('used-leave').value) || 0;
     const remainDays = maxTotal - usedDays;
-    
+
     updateLeaveTracker(maxTotal, usedDays, remainDays);
-    updateSummaryBanner(Math.max(0, remainDays), totalJoin >= totalAccounting ? '입사일 기준' : '회계연도 기준');
+    updateSummaryBanner(
+        Math.max(0, remainDays), 
+        totalJoin >= totalAccounting ? '입사일 기준' : '회계연도 기준', 
+        isPromotion
+    );
 }
 
-// ✅ 수정된 입사일 기준 계산 (가산연차 버그 수정)
-function renderJoinBasis(join, exit) {
+function renderJoinBasis(join, exit, isPromotion) {
     const tbody = document.querySelector('#join-basis-table tbody');
-    tbody.innerHTML = ''; 
-    let total = 0;
+    if (!tbody) return 0;
+    tbody.innerHTML = '';
+    const rows = [];
 
-    // 월차 (정확한 개월 수 계산)
+    // 1년차 미만 월차 (2017년 개정법 이후)
     if (join >= LAW_CHANGE_DATE) {
         let firstM = getActualMonths(join, exit);
-        if (firstM > 0) {
-            addRow(tbody, "1년차 미만", "매월 개근 시 발생", firstM.toFixed(1));
-            total += firstM;
-        }
+        if (firstM > 0) rows.push({ c1: "1년차 미만", c2: "매월 개근 시 발생", val: firstM });
     } else {
-        addRow(tbody, "1년차 미만", "구법 대상 (월차 없음)", "0.0");
+        rows.push({ c1: "1년차 미만", c2: "구법 대상 (월차 없음)", val: 0 });
     }
 
-    // 정기 연차 (3년차부터 가산 적용)
+    // 정기 연차 (3년차부터 가산)
     let year = 1;
     while (true) {
         let d = new Date(join);
         d.setFullYear(join.getFullYear() + year);
         if (d > exit) break;
-        // 3년차(year=2)부터 가산: 15 + Math.floor((year-1)/2)
-        let leave = Math.min(25, year >= 2 ? 15 + Math.floor((year-1)/2) : 15);
-        addRow(tbody, `${year+1}년차`, d.toLocaleDateString(), leave.toFixed(1));
-        total += leave;
+        let leave = Math.min(25, year >= 2 ? 15 + Math.floor((year - 1) / 2) : 15);
+        rows.push({ c1: `${year + 1}년차`, c2: d.toLocaleDateString(), val: leave });
         year++;
     }
-    addRow(tbody, "합계", "-", total.toFixed(1));
+
+    // 촉진제 적용: 마지막 연차만 남기고 나머지 0으로 처리
+    if (isPromotion && rows.length > 0) {
+        for (let i = 0; i < rows.length - 1; i++) {
+            rows[i].val = 0;
+            rows[i].c2 += " <span style='color:#ff4d4d; font-size:11px;'>(소멸)</span>";
+        }
+    }
+
+    let total = 0;
+    rows.forEach(row => {
+        total += row.val;
+        addRow(tbody, row.c1, row.c2, row.val.toFixed(1));
+    });
+
+    addRow(tbody, "합계", 
+        isPromotion ? "<span style='color:#764ba2; font-size:11px;'>촉진제 적용</span>" : "-", 
+        total.toFixed(1)
+    );
     return total;
 }
 
-// ✅ 수정된 회계연도 기준 계산 (윤년 반영)
-function renderAccountingBasis(join, exit) {
+function renderAccountingBasis(join, exit, isPromotion) {
     const tbody = document.querySelector('#accounting-basis-table tbody');
+    if (!tbody) return 0;
     tbody.innerHTML = '';
-    let total = 0;
+    const rows = [];
     const joinYear = join.getFullYear();
     const nextJan1 = new Date(joinYear + 1, 0, 1);
-    const oneYearAnn = new Date(join); 
+    const oneYearAnn = new Date(join);
     oneYearAnn.setFullYear(joinYear + 1);
 
-    // 월차 계산
+    // 월차 계산 (2017년 개정법 이후)
     if (join >= LAW_CHANGE_DATE) {
         let firstYMonthly = 0;
         for (let i = 1; i <= 11; i++) {
             let d = new Date(join); d.setMonth(join.getMonth() + i);
             if (d < nextJan1 && d <= exit) firstYMonthly++;
         }
-        if (firstYMonthly > 0) {
-            addRow(tbody, joinYear, "입사년 월차", firstYMonthly.toFixed(1));
-            total += firstYMonthly;
-        }
+        if (firstYMonthly > 0) rows.push({ c1: joinYear, c2: "입사년 월차", val: firstYMonthly });
 
         if (nextJan1 <= exit) {
             let secondYMonthly = 0;
@@ -125,194 +216,721 @@ function renderAccountingBasis(join, exit) {
                 let d = new Date(join); d.setMonth(join.getMonth() + i);
                 if (d >= nextJan1 && d < oneYearAnn && d <= exit) secondYMonthly++;
             }
-            if (secondYMonthly > 0) {
-                addRow(tbody, nextJan1.getFullYear(), "2년차 잔여 월차", secondYMonthly.toFixed(1));
-                total += secondYMonthly;
-            }
+            if (secondYMonthly > 0) rows.push({ c1: nextJan1.getFullYear(), c2: "2년차 잔여 월차", val: secondYMonthly });
         }
     }
 
-    // 비례분 (윤년 반영)
+    // 비례분 계산 (윤년 반영)
     if (nextJan1 <= exit) {
         const isLeapYear = (joinYear % 4 === 0 && joinYear % 100 !== 0) || (joinYear % 400 === 0);
         const daysInYear = isLeapYear ? 366 : 365;
-        let prop = (15 * ((nextJan1 - join) / (1000*60*60*24) / daysInYear));
-        addRow(tbody, nextJan1.getFullYear(), "연차 비례분", prop.toFixed(1));
-        total += prop;
+        let prop = 15 * ((nextJan1 - join) / (1000 * 60 * 60 * 24) / daysInYear);
+        rows.push({ c1: nextJan1.getFullYear(), c2: "연차 비례분", val: prop });
     }
 
     // 정기 연차 (3년차부터 가산)
     let curYear = joinYear + 2;
     while (true) {
-        let d = new Date(curYear, 0, 1); 
-        if (d > exit) break;
+        let d = new Date(curYear, 0, 1); if (d > exit) break;
         let yc = curYear - joinYear;
-        let leave = yc >= 2 ? Math.min(25, 15 + Math.floor((yc-1)/2)) : 15;
-        addRow(tbody, curYear, `${yc+1}년차 정기`, leave.toFixed(1));
-        total += leave;
+        let leave = yc >= 2 ? Math.min(25, 15 + Math.floor((yc - 1) / 2)) : 15;
+        rows.push({ c1: curYear, c2: `${yc + 1}년차 정기`, val: leave });
         curYear++;
     }
-    addRow(tbody, "합계", "-", total.toFixed(1));
+
+    // 촉진제 적용
+    if (isPromotion && rows.length > 0) {
+        for (let i = 0; i < rows.length - 1; i++) {
+            rows[i].val = 0;
+            rows[i].c2 += " <span style='color:#ff4d4d; font-size:11px;'>(소멸)</span>";
+        }
+    }
+
+    let total = 0;
+    rows.forEach(row => {
+        total += row.val;
+        addRow(tbody, row.c1, row.c2, row.val.toFixed(1));
+    });
+
+    addRow(tbody, "합계", 
+        isPromotion ? "<span style='color:#764ba2; font-size:11px;'>촉진제 적용</span>" : "-", 
+        total.toFixed(1)
+    );
     return total;
-}
-
-// 수당 계산
-function calculateMoney() {
-    const base = Number(document.getElementById('base-salary').value) || 0;
-    const days = Number(document.getElementById('unused-days').value) || 0;
-    let adds = 0;
-    document.querySelectorAll('.allowance-value').forEach(i => adds += Number(i.value) || 0);
-    
-    const totalOrdinaryWage = base + adds;
-    const hourlyPay = totalOrdinaryWage / 209;
-    const dailyPay = hourlyPay * 8;
-    const finalMoney = dailyPay * days;
-
-    const tbody = document.querySelector('#money-result-table tbody');
-    tbody.innerHTML = `
-        <tr><td>총 통상월급</td><td>기본급 + 수당 합계</td><td>${totalOrdinaryWage.toLocaleString()} 원</td></tr>
-        <tr><td>통상 시급</td><td>총액 / 209시간</td><td>${Math.floor(hourlyPay).toLocaleString()} 원</td></tr>
-        <tr><td>1일 통상임금</td><td>시급 × 8시간</td><td>${Math.floor(dailyPay).toLocaleString()} 원</td></tr>
-        <tr style="background:#f3ebff; font-weight:bold; color:#764ba2;">
-            <td>최종 수당 예상액</td>
-            <td>미사용 ${days}일분</td>
-            <td>${Math.floor(finalMoney).toLocaleString()} 원</td>
-        </tr>
-    `;
-}
-
-// ✅ 새로 추가된 트래커 관련 함수들
-function updateLeaveTracker(total, used, remain) {
-    const tracker = document.getElementById('leave-tracker');
-    const warning = document.getElementById('tracker-warning');
-    const sendBtn = document.getElementById('auto-send-btn');
-    
-    document.getElementById('tracker-total').textContent = total.toFixed(1) + '일';
-    document.getElementById('tracker-used').textContent = used.toFixed(1) + '일';
-    
-    const remainEl = document.getElementById('tracker-remain');
-    if (remain < 0) {
-        remainEl.textContent = remain.toFixed(1) + '일';
-        remainEl.className = 'tracker-value danger';
-        warning.style.display = 'block';
-        sendBtn.disabled = true;
-    } else {
-        remainEl.textContent = remain.toFixed(1) + '일';
-        remainEl.className = 'tracker-value remain';
-        warning.style.display = 'none';
-        sendBtn.disabled = remain === 0;
-    }
-    
-    tracker.style.display = 'block';
-}
-
-function updateSummaryBanner(remainDays, basisType) {
-    const banner = document.getElementById('summary-banner');
-    document.getElementById('banner-amount').textContent = remainDays.toFixed(1) + '일';
-    document.getElementById('banner-sub').textContent = `${basisType} 적용 (근로자 유리 기준)`;
-    banner.style.display = 'block';
-}
-
-function sendToMoneyTab() {
-    const remainText = document.getElementById('tracker-remain').textContent;
-    const remainValue = parseFloat(remainText);
-    
-    if (remainValue <= 0) {
-        alert('잔여 연차가 없거나 초과 사용 상태입니다!');
-        return;
-    }
-    
-    openTab('money-tab');
-    
-    const input = document.getElementById('unused-days');
-    input.value = remainValue.toFixed(1);
-    input.style.borderColor = '#764ba2';
-    input.style.background = '#fdfaff';
-    
-    setTimeout(() => {
-        input.style.borderColor = '#eee';
-        input.style.background = 'white';
-    }, 2000);
-    
-    alert(`✅ 잔여 연차 ${remainValue.toFixed(1)}일이 수당 계산에 자동 입력되었습니다!`);
-}
-
-// ✅ 유틸리티 함수들
-function addRow(t, c1, c2, c3) {
-    t.insertAdjacentHTML('beforeend', `<tr><td>${c1}</td><td>${c2}</td><td>${c3}</td></tr>`);
 }
 
 function getActualMonths(startDate, endDate) {
     let months = 0;
     let currentDate = new Date(startDate);
-    
     while (currentDate < endDate) {
         currentDate.setMonth(currentDate.getMonth() + 1);
-        if (currentDate <= endDate) {
-            months++;
-        }
+        if (currentDate <= endDate) months++;
         if (months >= 11) break;
     }
     return months;
 }
 
-// 실시간 업데이트
-document.getElementById('used-leave').addEventListener('input', function() {
-    const leaveReport = document.getElementById('leave-report');
-    if (leaveReport && leaveReport.style.display !== 'none') {
-        calculateLeave();
-    }
-});
+// ================= 트래커 UI =================
 
-// ✅ 날짜 입력 연도 4자리 제한 기능
-function limitDateYearInput(input) {
-    const value = input.value;
-    if (!value) return;
+function updateLeaveTracker(total, used, remain) {
+    const trackerTotal = document.getElementById('tracker-total');
+    const trackerUsed = document.getElementById('tracker-used');
+    const remainEl = document.getElementById('tracker-remain');
+    const sendBtn = document.getElementById('auto-send-btn');
+    const warning = document.getElementById('tracker-warning');
+    const tracker = document.getElementById('leave-tracker');
+
+    if (trackerTotal) trackerTotal.textContent = total.toFixed(1) + '일';
+    if (trackerUsed) trackerUsed.textContent = used.toFixed(1) + '일';
+
+    if (remainEl) {
+        if (remain < 0) {
+            remainEl.textContent = remain.toFixed(1) + '일';
+            remainEl.className = 'tracker-value danger';
+            if (warning) warning.style.display = 'block';
+            if (sendBtn) sendBtn.disabled = true;
+        } else {
+            remainEl.textContent = remain.toFixed(1) + '일';
+            remainEl.className = 'tracker-value remain';
+            if (warning) warning.style.display = 'none';
+            if (sendBtn) sendBtn.disabled = remain === 0;
+        }
+    }
+
+    if (tracker) tracker.style.display = 'block';
+}
+
+function updateSummaryBanner(remainDays, basisType, isPromotion) {
+    const bannerAmount = document.getElementById('banner-amount');
+    const bannerSub = document.getElementById('banner-sub');
+    const summaryBanner = document.getElementById('summary-banner');
+
+    if (bannerAmount) bannerAmount.textContent = remainDays.toFixed(1) + '일';
+    if (bannerSub) {
+        bannerSub.textContent = isPromotion 
+            ? `${basisType} 적용 · 촉진제로 이전 연차 소멸`
+            : `${basisType} 적용 (근로자 유리 기준)`;
+    }
+    if (summaryBanner) summaryBanner.style.display = 'block';
+}
+
+function sendToMoneyTab() {
+    const remainEl = document.getElementById('tracker-remain');
+    if (!remainEl) { alert('연차 계산을 먼저 완료해주세요.'); return; }
     
-    // yyyy-mm-dd 형식에서 연도 부분 추출 및 제한
-    const parts = value.split('-');
-    const year = parts[0];
+    const remainValue = parseFloat(remainEl.textContent);
+    if (remainValue <= 0) { alert('잔여 연차가 없거나 초과 사용 상태입니다!'); return; }
     
-    // 연도가 4자리를 초과하면 4자리로 자르기
-    if (year && year.length > 4) {
-        parts[0] = year.slice(0, 4);
-        input.value = parts.join('-');
+    openTab('money-tab');
+    
+    const input = document.getElementById('unused-days');
+    if (input) {
+        input.value = remainValue.toFixed(1);
+        input.style.borderColor = '#764ba2';
+        input.style.background = '#fdfaff';
+        
+        setTimeout(() => {
+            input.style.borderColor = '#eee';
+            input.style.background = 'white';
+        }, 2000);
     }
     
-    // 연도가 너무 큰 값이면 현실적인 범위로 제한
-    const yearNum = parseInt(parts[0]);
-    if (yearNum > 2100) {
-        parts[0] = '2100';
-        input.value = parts.join('-');
+    alert(`✅ 잔여 연차 ${remainValue.toFixed(1)}일이 수당 계산에 자동 입력되었습니다!`);
+}
+
+// ================= 수당 계산 =================
+
+function addAllowanceField() {
+    const list = document.getElementById('allowance-list');
+    if (!list) return;
+    
+    const row = document.createElement('div');
+    row.className = 'allowance-row';
+    row.innerHTML = `
+        <input type="text" placeholder="수당명(식대 등)" style="width:55%">
+        <input type="text" inputmode="numeric" placeholder="금액" class="allowance-value" style="width:30%">
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    const newAmountInput = row.querySelector('.allowance-value');
+    newAmountInput.addEventListener('input', function() { applyCommaFormat(this); });
+    newAmountInput.addEventListener('paste', function() { setTimeout(() => applyCommaFormat(this), 0); });
+    list.appendChild(row);
+}
+
+function toggleSalaryType() {
+    const isYearly = document.getElementById('type-yearly').checked;
+    const label = document.getElementById('base-salary-label');
+    const input = document.getElementById('base-salary');
+    const hint = document.getElementById('converted-salary-hint');
+
+    if (label) label.textContent = isYearly ? '계약 연봉 (원)' : '기본급 (월/원)';
+    if (input) input.placeholder = isYearly ? '예: 36,000,000' : '예: 2,500,000';
+    if (hint) hint.style.display = isYearly ? 'block' : 'none';
+    updateConvertedSalary();
+}
+
+function updateConvertedSalary() {
+    const typeYearly = document.getElementById('type-yearly');
+    const baseSalary = document.getElementById('base-salary');
+    const convertedAmount = document.getElementById('converted-amount');
+    
+    if (typeYearly && typeYearly.checked && baseSalary && convertedAmount) {
+        const val = parseNumber(baseSalary.value);
+        convertedAmount.textContent = Math.floor(val / 12).toLocaleString('ko-KR');
     }
 }
 
-// 모든 날짜 입력 필드에 이벤트 연결
-function setupDateInputLimits() {
-    const dateInputs = document.querySelectorAll('input[type="date"]');
-    dateInputs.forEach(input => {
-        // HTML 속성으로도 최대값 제한
-        input.max = "2100-12-31";
+function toggleAverageWage() {
+    const enableAverage = document.getElementById('enable-average-wage');
+    const inputs = document.getElementById('average-wage-inputs');
+    
+    if (enableAverage && inputs) {
+        inputs.style.display = enableAverage.checked ? 'block' : 'none';
+    }
+}
+
+function calculate3MonthsDetailedInfo() {
+    const joinInput = document.getElementById('join-date').value;
+    const exitInput = document.getElementById('exit-date').value;
+    if (!exitInput) return { days: 90, label: '기본값 (퇴사일 미입력)', isShortTerm: false };
+
+    const joinDate = joinInput ? new Date(joinInput) : null;
+    const exitDate = new Date(exitInput);
+    const threeMonthsBefore = new Date(exitDate);
+    threeMonthsBefore.setMonth(threeMonthsBefore.getMonth() - 3);
+
+    let startDate = threeMonthsBefore;
+    let isShortTerm = false;
+    if (joinDate && joinDate > threeMonthsBefore) { 
+        startDate = new Date(joinDate); 
+        isShortTerm = true; 
+    }
+
+    const endDate = new Date(exitDate);
+    endDate.setDate(endDate.getDate() - 1);
+
+    const totalDays = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    const fmt = (d) => `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+    const label = `${fmt(startDate)} ~ ${fmt(endDate)} = ${totalDays}일${isShortTerm ? ' (3개월 미만 특례)' : ''}`;
+
+    return { days: totalDays, label, isShortTerm };
+}
+
+function calculateMoney() {
+    let base = parseNumber(document.getElementById('base-salary').value);
+    const isYearly = document.getElementById('type-yearly').checked;
+    if (base <= 0) { alert("기본급을 올바르게 입력해주세요!"); return; }
+    if (isYearly) base = Math.floor(base / 12);
+
+    const totalDays = parseNumber(document.getElementById('unused-days').value);
+    if (totalDays <= 0) { alert("미사용 연차 일수를 입력해주세요!"); return; }
+
+    // 통상임금 계산
+    let adds = 0;
+    document.querySelectorAll('.allowance-value').forEach(i => adds += parseNumber(i.value));
+    const totalOrdinaryWage = base + adds;
+    const hourlyPay = totalOrdinaryWage / 209;
+    const dailyOrdinary = hourlyPay * 8;
+
+    // 평균임금 계산 (근로기준법 제19조 준수)
+    const isAverageEnabled = document.getElementById('enable-average-wage').checked;
+    let dailyAverage = 0, averageCalculated = false;
+    let total3M = 0, bonusIncluded = 0, leavePayIncluded = 0, grandTotal = 0;
+    let periodInfo = { days: 90, label: '-', isShortTerm: false };
+
+    if (isAverageEnabled) {
+        const month1 = parseNumber(document.getElementById('month1-salary').value);
+        const month2 = parseNumber(document.getElementById('month2-salary').value);
+        const month3 = parseNumber(document.getElementById('month3-salary').value);
+        const annualBonus = parseNumber(document.getElementById('annual-bonus').value);
+        const annualLeavePay = parseNumber(document.getElementById('annual-leave-pay').value);
+
+        total3M = month1 + month2 + month3;
+        bonusIncluded = Math.floor(annualBonus * 3 / 12);
+        leavePayIncluded = Math.floor(annualLeavePay * 3 / 12);
+        grandTotal = total3M + bonusIncluded + leavePayIncluded;
+        periodInfo = calculate3MonthsDetailedInfo();
+
+        if (grandTotal > 0) { 
+            dailyAverage = grandTotal / periodInfo.days; 
+            averageCalculated = true; 
+        }
+    }
+
+    const dailyUsed = Math.max(dailyOrdinary, dailyAverage);
+    const appliedBasis = (averageCalculated && dailyAverage > dailyOrdinary) ? '평균임금' : '통상임금';
+    const finalMoney = dailyUsed * totalDays;
+
+    const tbody = document.querySelector('#money-result-table tbody');
+    if (!tbody) return;
+
+    let tableHTML = `
+        <tr><td colspan="3" style="background:#f0f4ff; font-weight:600; color:#667eea; padding:12px; text-align:center;">🏛️ 통상임금 계산 내역</td></tr>
+        <tr><td>월 기본급</td><td>${isYearly ? '연봉 ÷ 12개월' : '직접 입력'}</td><td>${base.toLocaleString('ko-KR')} 원</td></tr>
+        <tr><td>월 통상임금</td><td>기본급 + 고정수당</td><td>${totalOrdinaryWage.toLocaleString('ko-KR')} 원</td></tr>
+        <tr><td>통상 시급</td><td>월 통상임금 ÷ 209시간</td><td>${Math.floor(hourlyPay).toLocaleString('ko-KR')} 원</td></tr>
+        <tr><td>통상임금 1일분</td><td>시급 × 8시간</td><td>${Math.floor(dailyOrdinary).toLocaleString('ko-KR')} 원</td></tr>
+    `;
+
+    if (averageCalculated) {
+        tableHTML += `
+            <tr><td colspan="3" style="background:#f8f9ff; font-weight:600; color:#667eea; padding:12px; text-align:center;">📊 평균임금 계산 내역 (근로기준법 제19조)</td></tr>
+            <tr><td>평균임금 계산기간</td><td colspan="2" style="color:#555; font-size:12px;">${periodInfo.label}</td></tr>
+            <tr><td>3개월 임금총액</td><td>최근 3개월 실수령 합계</td><td>${total3M.toLocaleString('ko-KR')} 원</td></tr>
+            <tr><td>연간 상여금 산입액</td><td>연간 상여금 × 3/12</td><td>${bonusIncluded.toLocaleString('ko-KR')} 원</td></tr>
+            <tr><td>연간 연차수당 산입액</td><td>연간 연차수당 × 3/12</td><td>${leavePayIncluded.toLocaleString('ko-KR')} 원</td></tr>
+            <tr><td>평균임금 산정 총액</td><td>3개월 임금 + 상여 + 연차수당</td><td>${grandTotal.toLocaleString('ko-KR')} 원</td></tr>
+            <tr><td>평균임금 계산 총일수</td><td>달력 기준${periodInfo.isShortTerm ? ' (특례)' : ''}</td><td>${periodInfo.days}일</td></tr>
+            <tr><td>평균임금 1일분</td><td>산정총액 ÷ ${periodInfo.days}일</td><td>${Math.floor(dailyAverage).toLocaleString('ko-KR')} 원</td></tr>
+        `;
+    }
+
+    tableHTML += `
+        <tr class="applied-basis-row">
+            <td><strong>✅ 적용 기준</strong></td>
+            <td colspan="2"><strong>${appliedBasis} 기준 적용 (근로기준법 제19조·제60조)</strong></td>
+        </tr>
+        <tr style="background:#f3ebff; font-weight:bold; color:#764ba2;">
+            <td>최종 수당 예상액</td>
+            <td>수당 대상 ${totalDays}일 × ${Math.floor(dailyUsed).toLocaleString('ko-KR')}원</td>
+            <td>${Math.floor(finalMoney).toLocaleString('ko-KR')} 원</td>
+        </tr>
+    `;
+
+    tbody.innerHTML = tableHTML;
+}
+
+// ================= 저장 시스템 =================
+
+function collectCurrentCalculationData() {
+    const allowances = [];
+    document.querySelectorAll('.allowance-row').forEach(row => {
+        const name = row.children[0].value;
+        const amount = parseNumber(row.children[1].value);
+        if (name && amount > 0) allowances.push({ name, amount });
+    });
+
+    const totalLeave = document.getElementById('tracker-total') ? parseFloat(document.getElementById('tracker-total').textContent) : 0;
+    const usedLeave = document.getElementById('tracker-used') ? parseFloat(document.getElementById('tracker-used').textContent) : 0;
+    const remainLeave = document.getElementById('tracker-remain') ? parseFloat(document.getElementById('tracker-remain').textContent) : 0;
+
+    let finalAllowance = 0, dailyOrdinary = 0, dailyAverage = 0, appliedBasis = '통상임금';
+    document.querySelectorAll('#money-result-table tbody tr').forEach(row => {
+        const cells = row.cells;
+        if (cells.length >= 3) {
+            const label = cells[0].textContent.trim();
+            const amount = cells[2].textContent.replace(/[^0-9]/g, '');
+            
+            if (label.includes('최종 수당')) finalAllowance = parseInt(amount) || 0;
+            else if (label.includes('통상임금 1일분')) dailyOrdinary = parseInt(amount) || 0;
+            else if (label.includes('평균임금 1일분')) dailyAverage = parseInt(amount) || 0;
+            else if (label.includes('적용 기준')) {
+                appliedBasis = cells[2] && cells[2].textContent.includes('평균임금') ? '평균임금' : '통상임금';
+            }
+        }
+    });
+
+    const bannerSub = document.getElementById('banner-sub');
+    const basisType = bannerSub && bannerSub.textContent.includes('입사일') ? '입사일 기준' : '회계연도 기준';
+
+    currentCalculationData = {
+        inputs: {
+            joinDate: document.getElementById('join-date') ? document.getElementById('join-date').value : '',
+            exitDate: document.getElementById('exit-date') ? document.getElementById('exit-date').value : '',
+            usedLeave: document.getElementById('used-leave') ? Number(document.getElementById('used-leave').value) || 0 : 0,
+            promotionEnabled: document.getElementById('enable-promotion') ? document.getElementById('enable-promotion').checked : false,
+            salaryType: document.getElementById('type-yearly') && document.getElementById('type-yearly').checked ? 'yearly' : 'monthly',
+            baseSalary: document.getElementById('base-salary') ? parseNumber(document.getElementById('base-salary').value) : 0,
+            allowances,
+            averageWageEnabled: document.getElementById('enable-average-wage') ? document.getElementById('enable-average-wage').checked : false,
+            month1Salary: document.getElementById('month1-salary') ? parseNumber(document.getElementById('month1-salary').value) : 0,
+            month2Salary: document.getElementById('month2-salary') ? parseNumber(document.getElementById('month2-salary').value) : 0,
+            month3Salary: document.getElementById('month3-salary') ? parseNumber(document.getElementById('month3-salary').value) : 0,
+            annualBonus: document.getElementById('annual-bonus') ? parseNumber(document.getElementById('annual-bonus').value) : 0,
+            annualLeavePay: document.getElementById('annual-leave-pay') ? parseNumber(document.getElementById('annual-leave-pay').value) : 0,
+            unusedDays: document.getElementById('unused-days') ? Number(document.getElementById('unused-days').value) || 0 : 0
+        },
+        results: {
+            basisType,
+            totalLeave,
+            usedLeave,
+            remainLeave: Math.max(0, remainLeave),
+            promotionApplied: document.getElementById('enable-promotion') ? document.getElementById('enable-promotion').checked : false,
+            appliedBasis,
+            dailyOrdinary,
+            dailyAverage,
+            finalAllowance
+        }
+    };
+}
+
+function showSaveModal() {
+    if (!currentCalculationData) {
+        alert('저장할 계산 데이터가 없습니다. 먼저 계산을 완료해주세요.');
+        return;
+    }
+    
+    const modal = document.getElementById('save-modal');
+    const backdrop = document.getElementById('modal-backdrop');
+    const titleInput = document.getElementById('save-title');
+    
+    if (modal) modal.style.display = 'flex';
+    if (backdrop) backdrop.style.display = 'block';
+    if (titleInput) {
+        titleInput.value = '';
+        setTimeout(() => titleInput.focus(), 100);
+    }
+}
+
+function closeSaveModal() {
+    const modal = document.getElementById('save-modal');
+    const backdrop = document.getElementById('modal-backdrop');
+    
+    if (modal) modal.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
+}
+
+function saveCalculationResult() {
+    const titleInput = document.getElementById('save-title');
+    if (!titleInput) return;
+    
+    const title = titleInput.value.trim();
+    if (!title) { alert('저장할 이름을 입력해주세요.'); return; }
+    if (!currentCalculationData) { alert('저장할 데이터가 없습니다.'); return; }
+    
+    const history = JSON.parse(localStorage.getItem('annualCalculatorHistory') || '[]');
+    const record = {
+        id: Date.now().toString(),
+        title,
+        createdAt: new Date().toISOString(),
+        ...currentCalculationData
+    };
+    
+    history.push(record);
+    localStorage.setItem('annualCalculatorHistory', JSON.stringify(history));
+    
+    closeSaveModal();
+    alert(`"${title}" 계산 내역이 저장되었습니다!`);
+    
+    if (currentTab !== 'history-tab') {
+        setTimeout(() => {
+            if (confirm('저장된 내역을 확인하시겠습니까?')) {
+                openTab('history-tab');
+            }
+        }, 500);
+    }
+}
+
+function renderHistoryList() {
+    const history = JSON.parse(localStorage.getItem('annualCalculatorHistory') || '[]');
+    const listContainer = document.getElementById('history-list');
+    const countElement = document.getElementById('history-count');
+    
+    if (countElement) countElement.textContent = `저장된 내역: ${history.length}건`;
+    if (!listContainer) return;
+    
+    if (history.length === 0) {
+        listContainer.innerHTML = `
+            <div class="empty-history">
+                <p>💾 저장된 계산 내역이 없습니다</p>
+                <p>연차나 수당 계산 후 "💾 이 결과 저장하기" 버튼을 눌러보세요!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const sortedHistory = [...history].reverse();
+    
+    listContainer.innerHTML = sortedHistory.map(item => {
+        const createdDate = new Date(item.createdAt).toLocaleString('ko-KR');
+        const allowanceText = item.inputs.allowances && item.inputs.allowances.length > 0 
+            ? item.inputs.allowances.map(a => `${a.name}:${Number(a.amount).toLocaleString()}`).join('|')
+            : '없음';
         
-        // 입력 이벤트 연결
-        input.addEventListener('input', function() {
-            limitDateYearInput(this);
-        });
-        
-        // 변경 이벤트도 연결 (복사-붙여넣기 대응)
-        input.addEventListener('change', function() {
-            limitDateYearInput(this);
-        });
+        return `
+            <div class="history-item" data-title="${item.title.toLowerCase()}">
+                <div class="history-main">
+                    <div class="history-info">
+                        <h4>${item.title}</h4>
+                        <div class="history-meta">
+                            <span>📅 ${createdDate}</span>
+                            <span>📊 ${item.results.basisType || '-'}</span>
+                            <span>🏛️ ${item.results.appliedBasis || '-'}</span>
+                            ${item.results.promotionApplied ? '<span style="color:#ff4d4d;">🚫 촉진제</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="history-actions">
+                        <button class="btn-load" onclick="loadHistoryData('${item.id}')">불러오기</button>
+                        <button class="btn-delete" onclick="deleteHistoryItem('${item.id}')">삭제</button>
+                    </div>
+                </div>
+                <div class="history-summary">
+                    <div class="summary-row">
+                        <span class="summary-label">입사일 → 퇴사일:</span>
+                        <span class="summary-value">${item.inputs.joinDate} → ${item.inputs.exitDate}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">총 발생 / 사용 / 잔여:</span>
+                        <span class="summary-value">${item.results.totalLeave}일 / ${item.results.usedLeave}일 / ${item.results.remainLeave}일</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">기본급 / 수당:</span>
+                        <span class="summary-value">${Number(item.inputs.baseSalary).toLocaleString()}원 / ${allowanceText}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">최종 수당 예상액:</span>
+                        <span class="summary-value" style="color:#764ba2; font-weight:bold;">${Number(item.results.finalAllowance).toLocaleString()}원</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function filterHistory() {
+    const searchInput = document.getElementById('history-search');
+    if (!searchInput) return;
+    
+    const searchTerm = searchInput.value.toLowerCase();
+    document.querySelectorAll('.history-item').forEach(item => {
+        const title = item.dataset.title;
+        item.style.display = title.includes(searchTerm) ? 'block' : 'none';
     });
 }
 
-// DOM 로드 완료 시 실행
-document.addEventListener('DOMContentLoaded', setupDateInputLimits);
+function loadHistoryData(id) {
+    const history = JSON.parse(localStorage.getItem('annualCalculatorHistory') || '[]');
+    const item = history.find(h => h.id === id);
+    if (!item) { alert('해당 데이터를 찾을 수 없습니다.'); return; }
+    
+    // 안전한 값 설정
+    const safeSetValue = (elementId, value) => {
+        const el = document.getElementById(elementId);
+        if (el) el.value = value;
+    };
+    
+    const safeSetChecked = (elementId, checked) => {
+        const el = document.getElementById(elementId);
+        if (el) el.checked = checked;
+    };
+    
+    // 입력값 복원
+    safeSetValue('join-date', item.inputs.joinDate);
+    safeSetValue('exit-date', item.inputs.exitDate);
+    safeSetValue('used-leave', item.inputs.usedLeave);
+    safeSetChecked('enable-promotion', item.inputs.promotionEnabled);
+    
+    if (item.inputs.salaryType === 'yearly') {
+        safeSetChecked('type-yearly', true);
+    } else {
+        safeSetChecked('type-monthly', true);
+    }
+    toggleSalaryType();
+    
+    safeSetValue('base-salary', Number(item.inputs.baseSalary).toLocaleString());
+    
+    // 수당 항목 복원
+    const allowanceList = document.getElementById('allowance-list');
+    if (allowanceList) {
+        allowanceList.innerHTML = '';
+        (item.inputs.allowances || []).forEach(allowance => {
+            addAllowanceField();
+            const rows = allowanceList.querySelectorAll('.allowance-row');
+            const lastRow = rows[rows.length - 1];
+            if (lastRow) {
+                lastRow.children[0].value = allowance.name;
+                lastRow.children[1].value = Number(allowance.amount).toLocaleString();
+                applyCommaFormat(lastRow.children[1]);
+            }
+        });
+    }
+    
+    // 평균임금 정보 복원
+    safeSetChecked('enable-average-wage', item.inputs.averageWageEnabled);
+    toggleAverageWage();
+    
+    if (item.inputs.averageWageEnabled) {
+        const fields = {
+            'month1-salary': item.inputs.month1Salary,
+            'month2-salary': item.inputs.month2Salary,
+            'month3-salary': item.inputs.month3Salary,
+            'annual-bonus': item.inputs.annualBonus,
+            'annual-leave-pay': item.inputs.annualLeavePay
+        };
+        
+        Object.entries(fields).forEach(([id, val]) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = Number(val).toLocaleString();
+                applyCommaFormat(el);
+            }
+        });
+    }
+    
+    safeSetValue('unused-days', item.inputs.unusedDays);
+    
+    openTab('leave-tab');
+    setTimeout(() => {
+        mainCalculate();
+        alert(`"${item.title}" 내역을 불러왔습니다!`);
+    }, 100);
+}
 
-// 이미 DOM이 로드된 경우를 위한 즉시 실행
-if (document.readyState === 'loading') {
-    // DOM이 아직 로딩 중이면 DOMContentLoaded 이벤트를 기다림
-} else {
-    // DOM이 이미 로드되었으면 즉시 실행
-    setupDateInputLimits();
+function deleteHistoryItem(id) {
+    if (!confirm('정말 삭제하시겠습니까?')) return;
+    
+    let history = JSON.parse(localStorage.getItem('annualCalculatorHistory') || '[]');
+    history = history.filter(h => h.id !== id);
+    localStorage.setItem('annualCalculatorHistory', JSON.stringify(history));
+    
+    renderHistoryList();
+    alert('삭제되었습니다.');
+}
+
+function clearAllHistory() {
+    const history = JSON.parse(localStorage.getItem('annualCalculatorHistory') || '[]');
+    if (history.length === 0) { alert('삭제할 내역이 없습니다.'); return; }
+    
+    if (!confirm(`정말 모든 저장 내역(${history.length}건)을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) return;
+    
+    localStorage.removeItem('annualCalculatorHistory');
+    renderHistoryList();
+    alert('모든 저장 내역이 삭제되었습니다.');
+}
+
+// ✅ 핵심: XLSX 파일 다운로드 (SheetJS 활용)
+function exportToExcel() {
+    const history = JSON.parse(localStorage.getItem('annualCalculatorHistory') || '[]');
+    if (history.length === 0) { alert('다운로드할 데이터가 없습니다.'); return; }
+
+    // 헤더 정의
+    const headers = [
+        '저장ID', '제목', '저장일시', '입사일', '퇴사일', '기준',
+        '총발생연차', '사용연차', '잔여연차', '촉진제적용여부',
+        '급여기준', '기본급', '수당합계', '평균임금사용여부',
+        '3개월총임금', '연간상여금', '상여금산입액',
+        '연간연차수당', '연차수당산입액', '통상임금1일분',
+        '평균임금1일분', '적용임금기준', '미사용연차일수',
+        '최종수당예상액', '수당상세내역'
+    ];
+
+    // 데이터 행 생성
+    const dataRows = history.map(item => {
+        const allowances = item.inputs.allowances || [];
+        const allowanceTotal = allowances.reduce((sum, a) => sum + a.amount, 0);
+        const allowanceDetail = allowances.length > 0
+            ? allowances.map(a => `${a.name}:${a.amount}`).join(' | ')
+            : '없음';
+
+        const bonusIncluded = Math.floor((item.inputs.annualBonus || 0) * 3 / 12);
+        const leavePayIncluded = Math.floor((item.inputs.annualLeavePay || 0) * 3 / 12);
+        const total3M = (item.inputs.month1Salary || 0) +
+                        (item.inputs.month2Salary || 0) +
+                        (item.inputs.month3Salary || 0);
+
+        return [
+            item.id,
+            item.title,
+            new Date(item.createdAt).toLocaleString('ko-KR'),
+            item.inputs.joinDate,
+            item.inputs.exitDate,
+            item.results.basisType || '',
+            item.results.totalLeave || 0,
+            item.results.usedLeave || 0,
+            item.results.remainLeave || 0,
+            item.results.promotionApplied ? 'Y' : 'N',
+            item.inputs.salaryType === 'yearly' ? '연봉' : '월급',
+            item.inputs.baseSalary || 0,
+            allowanceTotal,
+            item.inputs.averageWageEnabled ? 'Y' : 'N',
+            total3M,
+            item.inputs.annualBonus || 0,
+            bonusIncluded,
+            item.inputs.annualLeavePay || 0,
+            leavePayIncluded,
+            item.results.dailyOrdinary || 0,
+            item.results.dailyAverage || 0,
+            item.results.appliedBasis || '',
+            item.inputs.unusedDays || 0,
+            item.results.finalAllowance || 0,
+            allowanceDetail
+        ];
+    });
+
+    // 헤더 + 데이터 합치기
+    const worksheetData = [headers, ...dataRows];
+
+    // SheetJS로 워크시트 생성
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+    // 열 너비 최적화 설정
+    worksheet['!cols'] = [
+        { wch: 15 }, { wch: 25 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
+        { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 15 },
+        { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+        { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 14 }, { wch: 15 }, { wch: 15 }, { wch: 35 }
+    ];
+
+    // 워크북 생성 및 시트 추가
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '연차수당계산내역');
+
+    // XLSX 파일 다운로드
+    const fileName = `연차수당_계산내역_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+
+    alert(`${history.length}건의 계산 내역이 엑셀 파일(.xlsx)로 다운로드되었습니다!`);
+}
+
+// ================= 이벤트 리스너 =================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 날짜 연도 제한
+    document.querySelectorAll('input[type="date"]').forEach(input => {
+        input.addEventListener('input', function() { limitDateYearInput(this); });
+        input.addEventListener('change', function() { limitDateYearInput(this); });
+    });
+
+    // 금액 필드 콤마 포맷
+    ['base-salary', 'month1-salary', 'month2-salary', 'month3-salary', 'annual-bonus', 'annual-leave-pay']
+        .forEach(id => attachMoneyFormat(id));
+
+    // 미사용 연차 소수점 허용
+    const unusedDaysInput = document.getElementById('unused-days');
+    if (unusedDaysInput) {
+        unusedDaysInput.setAttribute('inputmode', 'decimal');
+        unusedDaysInput.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9.]/g, '');
+        });
+    }
+
+    // 기본급 실시간 환산
+    const salaryInput = document.getElementById('base-salary');
+    if (salaryInput) salaryInput.addEventListener('input', updateConvertedSalary);
+
+    // 사용 연차 실시간 재계산
+    const usedLeaveInput = document.getElementById('used-leave');
+    if (usedLeaveInput) {
+        usedLeaveInput.addEventListener('input', function() {
+            const leaveReport = document.getElementById('leave-report');
+            if (leaveReport && leaveReport.style.display !== 'none') calculateLeave();
+        });
+    }
+
+    // 저장 모달 Enter 키 지원
+    const saveInput = document.getElementById('save-title');
+    if (saveInput) {
+        saveInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') saveCalculationResult();
+        });
+    }
+});
+
+// DOM 이미 로드된 경우 대비
+if (document.readyState !== 'loading') {
+    document.querySelectorAll('input[type="date"]').forEach(input => {
+        input.addEventListener('input', function() { limitDateYearInput(this); });
+        input.addEventListener('change', function() { limitDateYearInput(this); });
+    });
 }
