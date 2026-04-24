@@ -138,7 +138,7 @@ function renderJoinBasis(join, exit, isPromotion) {
         d.setFullYear(join.getFullYear() + year);
         if (d > exit) break;
         let leave = Math.min(25, year >= 2 ? 15 + Math.floor((year - 1) / 2) : 15);
-        rows.push({ c1: `${year + 1}년차`, c2: d.toLocaleDateString(), val: leave });
+        rows.push({ c1: `${year}년차`, c2: d.toLocaleDateString(), val: leave });
         year++;
     }
 
